@@ -16,6 +16,7 @@ const elements = {
   csvFile: document.getElementById('csvFile'),
   generateBtn: document.getElementById('generateBtn'),
   copyBtn: document.getElementById('copyBtn'),
+  openGmailDraftBtn: document.getElementById('openGmailDraftBtn'),
   downloadCsvBtn: document.getElementById('downloadCsvBtn'),
   resultBody: document.getElementById('resultBody'),
   previewCanvas: document.getElementById('previewCanvas'),
@@ -93,8 +94,16 @@ function bindEvents() {
     }
 
     const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '');
+    const templatePrep = prepareTemplateReference(eventPayload.templateSource);
+    if (!templatePrep.ok) {
+      alert(templatePrep.message);
+      return;
+    }
 
-    generatedRows = csvRows.map((row) => {
+    generatedRows = [];
+    let partial = false;
+
+    for (const row of csvRows) {
       const certificateId = crypto.randomUUID();
       const verifyCode = generateVerifyCode();
 
@@ -113,22 +122,39 @@ function bindEvents() {
           manager_email: eventPayload.managerEmail
         },
         template: {
-          source: eventPayload.templateSource,
+          source_ref: templatePrep.ref,
           layout: eventPayload.layout
         }
       };
 
-      saveCertificatePayload(certificateId, tokenPayload);
+      const saveResult = saveCertificatePayload(certificateId, tokenPayload);
+      if (!saveResult.ok) {
+        partial = true;
+        break;
+      }
+
       const link = `${baseUrl}certificate.html?id=${encodeURIComponent(certificateId)}`;
 
-      return {
+      generatedRows.push({
         ...row,
         certificate_id: certificateId,
         verify_code: verifyCode,
         status: 'Hazır',
+        certificate_created_at: new Date().toISOString(),
+        email_sent_at: '',
+        email_status: 'pending',
         link
-      };
-    });
+      });
+    }
+
+    if (!generatedRows.length) {
+      alert('Link üretilemedi. Şablon dosyası çok büyük olabilir. Daha küçük boyutta JPG/PNG deneyin.');
+      return;
+    }
+
+    if (partial) {
+      alert(`Depolama limiti nedeniyle kısmi üretim yapıldı. ${generatedRows.length}/${csvRows.length} katılımcı için link oluşturuldu.`);
+    }
 
     renderRows(generatedRows);
     currentStep = 4;
@@ -168,8 +194,30 @@ function bindEvents() {
     renderStep();
   });
 
-  elements.downloadCsvBtn.addEventListener('click', () => {
-    downloadUpdatedCsv();
+  if (elements.downloadCsvBtn) {
+    elements.downloadCsvBtn.addEventListener('click', () => {
+      downloadUpdatedCsv();
+    });
+  }
+
+  if (elements.openGmailDraftBtn) {
+    elements.openGmailDraftBtn.addEventListener('click', async () => {
+      await openGmailDraft();
+    });
+  }
+
+  elements.resultBody.addEventListener('click', async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLButtonElement)) return;
+    if (!target.classList.contains('single-send-btn')) return;
+
+    const certificateId = target.dataset.certificateId;
+    if (!certificateId) return;
+
+    const row = generatedRows.find((item) => item.certificate_id === certificateId);
+    if (!row) return;
+
+    await openSingleGmailDraft(row);
   });
 }
 
@@ -325,15 +373,141 @@ function renderRows(rows) {
 
   rows.forEach((row) => {
     const tr = document.createElement('tr');
+    const mailDate = row.email_sent_at
+      ? new Date(row.email_sent_at).toLocaleString('tr-TR')
+      : '-';
+
     tr.innerHTML = `
       <td>${escapeHtml(row.full_name)}</td>
       <td>${escapeHtml(row.email)}</td>
       <td>${row.status}</td>
+      <td>${row.email_status}</td>
+      <td>${mailDate}</td>
       <td><a href="${row.link}" target="_blank" rel="noreferrer">Sertifika Linki</a></td>
+      <td><button type="button" class="secondary single-send-btn" data-certificate-id="${row.certificate_id}">Tekli Gönder</button></td>
     `;
 
     elements.resultBody.appendChild(tr);
   });
+}
+
+async function openGmailDraft() {
+  if (!generatedRows.length) {
+    alert('Önce link üretin.');
+    return;
+  }
+
+  const eventPayload = getEventPayload();
+  if (!eventPayload.valid) {
+    alert('Gmail taslağı için etkinlik bilgileri geçerli olmalı.');
+    return;
+  }
+
+  try {
+    const bccList = generatedRows
+      .map((item) => item.email.trim())
+      .filter((email) => isValidEmail(email));
+
+    if (!bccList.length) {
+      alert('Geçerli alıcı e-postası bulunamadı.');
+      return;
+    }
+
+    const bccEmails = bccList.join(',');
+    const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '');
+    const accessLink = `${baseUrl}index.html`;
+
+    const subject = `${eventPayload.eventName} Sertifika Bilgilendirmesi`;
+    const body = [
+      'Merhaba,',
+      '',
+      `${eventPayload.eventName} etkinliği için sertifika süreci başlamıştır.`,
+      `Konuşmacı: ${eventPayload.speaker}`,
+      `Tarih: ${eventPayload.eventDate}`,
+      '',
+      'Katılımcı linkine girerek e-posta adresinizi doğrulayıp sertifikanızı görüntüleyebilirsiniz:',
+      accessLink,
+      '',
+      'Not: Bu duyuru mailidir. Sertifikanız yalnızca sistemde kayıtlı e-posta ile erişilebilir olacaktır.',
+      '',
+      'İyi günler dileriz.'
+    ].join('\n');
+
+    const gmailUrl =
+      `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(eventPayload.managerEmail)}` +
+      `&bcc=${encodeURIComponent(bccEmails)}` +
+      `&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    if (gmailUrl.length > 1800) {
+      await navigator.clipboard.writeText(bccEmails);
+      const fallbackUrl =
+        `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(eventPayload.managerEmail)}` +
+        `&su=${encodeURIComponent(subject)}` +
+        `&body=${encodeURIComponent(body + '\n\nBCC listesi panoya kopyalandı.')}`;
+
+      window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+      alert('Alıcı listesi uzun olduğu için BCC adresleri panoya kopyalandı. Gmail taslağı açıldı, BCC alanına yapıştırın.');
+      return;
+    }
+
+    window.open(gmailUrl, '_blank', 'noopener,noreferrer');
+
+    const nowIso = new Date().toISOString();
+    generatedRows = generatedRows.map((row) => ({
+      ...row,
+      email_status: 'draft_opened',
+      email_sent_at: nowIso
+    }));
+    renderRows(generatedRows);
+  } catch (error) {
+    alert(`Gmail taslağı açılırken hata: ${error.message}`);
+  }
+}
+
+async function openSingleGmailDraft(row) {
+  const eventPayload = getEventPayload();
+  if (!eventPayload.valid) {
+    alert('Tekli gönderim için etkinlik bilgileri geçerli olmalı.');
+    return;
+  }
+
+  const recipient = row.email.trim();
+  if (!isValidEmail(recipient)) {
+    alert('Katılımcı e-posta adresi geçerli değil.');
+    return;
+  }
+
+  const subject = `${eventPayload.eventName} Sertifikanız Hazır`;
+  const body = [
+    `Merhaba ${row.full_name},`,
+    '',
+    `${eventPayload.eventName} etkinliği sertifikanız hazır.`,
+    `Konuşmacı: ${eventPayload.speaker}`,
+    `Tarih: ${eventPayload.eventDate}`,
+    '',
+    'Sertifikanızı görüntülemek/indirmek için link:',
+    row.link,
+    '',
+    'İyi günler dileriz.'
+  ].join('\n');
+
+  const gmailUrl =
+    `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(recipient)}` +
+    `&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  window.open(gmailUrl, '_blank', 'noopener,noreferrer');
+
+  const nowIso = new Date().toISOString();
+  generatedRows = generatedRows.map((item) => {
+    if (item.certificate_id !== row.certificate_id) return item;
+    return {
+      ...item,
+      email_status: 'single_draft_opened',
+      email_sent_at: nowIso
+    };
+  });
+
+  renderRows(generatedRows);
 }
 
 function parseCsv(text) {
@@ -389,7 +563,59 @@ function splitCsvLine(line) {
 }
 
 function saveCertificatePayload(certificateId, payload) {
-  localStorage.setItem(`cert_mvp_${certificateId}`, JSON.stringify(payload));
+  try {
+    localStorage.setItem(`cert_mvp_${certificateId}`, JSON.stringify(payload));
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function prepareTemplateReference(templateSource) {
+  if (/^https?:\/\//i.test(templateSource)) {
+    return {
+      ok: true,
+      ref: {
+        type: 'url',
+        value: templateSource
+      }
+    };
+  }
+
+  try {
+    clearPreviousGeneratedStorage();
+
+    const templateKey = `cert_tpl_${Date.now()}`;
+    localStorage.setItem(templateKey, templateSource);
+
+    return {
+      ok: true,
+      ref: {
+        type: 'storage',
+        key: templateKey
+      }
+    };
+  } catch {
+    return {
+      ok: false,
+      message: 'Şablon görseli depolama sınırını aşıyor. Görseli küçültüp tekrar deneyin veya URL ile kullanın.'
+    };
+  }
+}
+
+function clearPreviousGeneratedStorage() {
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    if (key.startsWith('cert_mvp_') || key.startsWith('cert_tpl_')) {
+      keys.push(key);
+    }
+  }
+
+  keys.forEach((key) => {
+    localStorage.removeItem(key);
+  });
 }
 
 function generateVerifyCode() {
@@ -425,6 +651,10 @@ function clampNumber(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 function escapeHtml(input) {
   return input
     .replaceAll('&', '&amp;')
@@ -450,14 +680,13 @@ function downloadUpdatedCsv() {
   ];
 
   const rows = generatedRows.map((row) => {
-    const createdAt = new Date().toISOString();
     return [
       row.full_name,
       row.email,
       row.certificate_id,
-      createdAt,
-      '',
-      'pending'
+      row.certificate_created_at || '',
+      row.email_sent_at || '',
+      row.email_status || 'pending'
     ];
   });
 

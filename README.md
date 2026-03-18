@@ -11,6 +11,7 @@ Bu sürüm, hızlı demo için hazırlanmış basit bir prototiptir.
 - CSV (`full_name,email`) yükleme
 - Her katılımcı için tekil sertifika linki üretme
 - Katılımcı linkten sertifikayı görüp JPG indirme
+- Gmail taslağını tek tıkla açma (BCC ile toplu duyuru)
 - Güncellenmiş CSV (tracking sütunları ile) indirme
 
 ## Hızlı başlatma (Yerelde)
@@ -48,16 +49,24 @@ git push -u origin main
 
 Her GitHub push'dan sonra Netlify otomatik deploy edecek.
 
+## Email Duyurusu (Gmail Taslak)
+
+1. Link üretimi bittikten sonra `Gmail Taslağı Aç` butonuna bas.
+2. Gmail compose ekranı BCC listesi, konu ve içerik dolu şekilde açılır.
+3. Gerekirse metni düzenle ve `Gönder` bas.
+
+Not: Bu yaklaşımda gönderim tamamen yöneticinin Gmail hesabından manuel tamamlanır.
+
 ## Notlar
 
-- Bu sürümde otomatik email gönderimi yoktur (Netlify Functions API entegrasyonu yapılmış ama henüz aktif değil).
+- Otomatik mail API zorunlu değildir; düşük maliyet için Gmail taslak akışı yeterlidir.
 - Linkler kısa `id` ile üretilir; detay veri tarayıcı `localStorage` içinde tutulur.
 - Bu nedenle link, ilk adımda linki üreten cihaz/tarayıcıda sorunsuz açılır.
 - Gelecek sürümde: Supabase + email gönderim + doğrulama ekranı.
 
 ## Gelecek (Next Steps)
 
-- Email API entegrasyonu (Resend/SendGrid)
+- Email API entegrasyonu (Resend/SendGrid) - opsiyonel
 - Doğrulama endpoint (QR kod + katılımcı adı)
 - Hazır şablon kütüphanesi
 - Sürükle-bırak konumlandırma opsiyonu

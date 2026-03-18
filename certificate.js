@@ -40,7 +40,12 @@ async function init() {
 }
 
 async function renderCertificate(data) {
-  const image = await loadImage(data.template.source);
+  const templateSource = resolveTemplateSource(data.template);
+  if (!templateSource) {
+    throw new Error('Şablon kaynağı bulunamadı. Linkleri yeniden üretin.');
+  }
+
+  const image = await loadImage(templateSource);
   canvas.width = image.width;
   canvas.height = image.height;
 
@@ -99,4 +104,25 @@ function loadPayloadFromStorage(certificateId) {
   } catch {
     return null;
   }
+}
+
+function resolveTemplateSource(template) {
+  if (!template) return '';
+
+  if (template.source) {
+    return template.source;
+  }
+
+  const sourceRef = template.source_ref;
+  if (!sourceRef) return '';
+
+  if (sourceRef.type === 'url') {
+    return sourceRef.value || '';
+  }
+
+  if (sourceRef.type === 'storage') {
+    return localStorage.getItem(sourceRef.key) || '';
+  }
+
+  return '';
 }
