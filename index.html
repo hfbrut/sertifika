@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sertifika MVP</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Sertifika MVP (1 Gece Sürümü)</h1>
+      <p class="sub">Adım adım ilerle: kullanım tipi seç, etkinliği kur, şablonu ayarla, link üret.</p>
+
+      <section class="card step" data-step="0">
+        <h2>0) Ne yapmak istiyorsun?</h2>
+        <div class="grid">
+          <label>
+            İşlem Tipi
+            <select id="flowType">
+              <option value="create" selected>Sertifika Oluştur</option>
+              <option value="participant">Katılımcı Sertifika Görüntüle (Yakında)</option>
+              <option value="verify">Sertifika Doğrula (Yakında)</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint">Bu gece çalışan akış: Sertifika Oluştur</p>
+      </section>
+
+      <section class="card step" data-step="1">
+        <h2>1) Etkinlik Bilgileri</h2>
+        <div class="grid">
+          <label>Etkinlik Adı<input id="eventName" placeholder="Örn: Yapay Zeka Webinarı" /></label>
+          <label>Tarih<input id="eventDate" type="date" /></label>
+          <label>Konuşmacı<input id="speaker" placeholder="Örn: Ahmet Yılmaz" /></label>
+          <label>Yönetici E-posta<input id="managerEmail" type="email" placeholder="yonetici@ornek.com" /></label>
+        </div>
+      </section>
+
+      <section class="card step" data-step="2">
+        <h2>2) Şablon + Konumlandırma</h2>
+        <div class="grid">
+          <label>Şablon Linki (önerilen)
+            <input id="templateUrl" placeholder="https://.../template.jpg" />
+          </label>
+          <label>veya JPG/PNG Yükle
+            <input id="templateFile" type="file" accept="image/png,image/jpeg" />
+          </label>
+          <label>Önizleme Yakınlaştırma (%)
+            <input id="previewZoom" type="number" value="100" min="25" max="200" step="5" />
+          </label>
+        </div>
+        <p class="hint">Not: Link ile kullanırsan katılımcı tarafında daha stabil çalışır. Önizleme gerçek ölçüye göre çizilir.</p>
+        <div class="grid">
+          <label>Ad X (px)<input id="nameX" type="number" value="960" /></label>
+          <label>Ad Y (px)<input id="nameY" type="number" value="540" /></label>
+          <label>Ad Font Boyutu<input id="nameSize" type="number" value="56" /></label>
+          <label>Ad Hizalama
+            <select id="nameAlign">
+              <option value="left">Sola</option>
+              <option value="center" selected>Ortala</option>
+              <option value="right">Sağa</option>
+            </select>
+          </label>
+          <label>Alt Yazı Y (px)<input id="metaY" type="number" value="640" /></label>
+          <label>Alt Yazı Font Boyutu<input id="metaSize" type="number" value="28" /></label>
+        </div>
+        <div class="preview-wrap">
+          <div class="preview-header">
+            <strong>Canlı Önizleme</strong>
+            <span id="previewInfo" class="hint">Şablon seçildiğinde görünecek</span>
+          </div>
+          <canvas id="previewCanvas"></canvas>
+        </div>
+      </section>
+
+      <section class="card step" data-step="3">
+        <h2>3) Katılımcı Listesi</h2>
+        <p class="hint">CSV başlıkları: <strong>full_name,email</strong></p>
+        <label for="csvFile">CSV Dosyası Seç</label>
+        <input id="csvFile" type="file" accept=".csv" />
+        <div class="actions">
+          <button id="generateBtn">Linkleri Üret</button>
+          <button id="copyBtn" class="secondary">Tümünü Kopyala</button>
+        </div>
+      </section>
+
+      <section class="card step" data-step="4">
+        <h2>4) Sonuç</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Ad Soyad</th>
+              <th>Email</th>
+              <th>Durum</th>
+              <th>Link</th>
+            </tr>
+          </thead>
+          <tbody id="resultBody"></tbody>
+        </table>
+        <div class="actions">
+          <button id="downloadCsvBtn" class="secondary">Güncellenen CSV İndir</button>
+        </div>
+      </section>
+
+      <section class="card nav-card">
+        <div class="actions">
+          <button id="prevStepBtn" class="secondary">Geri</button>
+          <button id="nextStepBtn">İleri</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
